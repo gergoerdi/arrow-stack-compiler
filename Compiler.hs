@@ -9,11 +9,11 @@ import Control.Arrow.Operations
 import Control.Monad
 import Control.Monad.Identity
 
+--- Type-level naturals    
 data Z
 data S n
 
-data Register = EAX | EBX deriving (Show, Eq)
-    
+--- Opcodes of the target machine    
 data Op = Push Register
         | Pop Register
         | Nop
@@ -23,11 +23,16 @@ data Op = Push Register
         | Print Register
         deriving Show
 
+data Register = EAX | EBX deriving (Show, Eq)
+    
+--- Input language
 data Expr = IntLit Int
           | Expr :+: Expr
           | Expr :*: Expr
           deriving Show
 
+
+--- The assembler arrow
 type Machine b c = WriterArrow [Op] (Kleisli Identity) b c
 
 output :: Op -> Machine n m
@@ -36,7 +41,7 @@ output op = proc _ -> do
               returnA -< (undefined :: m)
 
 
---- CPU opcodes with stack manipulation information              
+--- CPU opcodes with stack specification
 push :: Register -> Machine n (S n)
 push reg = output $ Push reg
 
@@ -53,18 +58,18 @@ print = pop EAX >>>
         output (Print EAX)
 
 add :: Register -> Register -> Machine n n
-add r r' = output $ Add r r'
+add target param = output $ Add target param
 
 mul :: Register -> Register -> Machine n n
-mul r r' = output $ Mul r r'
+mul target param = output $ Mul target param
 
            
 --- Derived operations
-stackBinOp :: (Register -> Register -> Machine n n) -> Machine (S (S n)) (S n)
-stackBinOp op = pop EAX >>>
-                pop EBX >>>
-                op EAX EBX >>>
-                push EAX
+binOp :: (Register -> Register -> Machine n n) -> Machine (S (S n)) (S n)
+binOp op = pop EAX >>>
+           pop EBX >>>
+           op EAX EBX >>>
+           push EAX
 
 
 --- Compiler                     
@@ -74,20 +79,18 @@ compileExpr (IntLit n) = set EAX n >>>
                               
 compileExpr (e :+: e') = compileExpr e >>>
                          compileExpr e' >>>
-                         stackBinOp add
+                         binOp add
                               
 compileExpr (e :*: e') = compileExpr e >>>
                          compileExpr e' >>>
-                         stackBinOp mul
+                         binOp mul
 
---- Runner for compiler                                    
-collect :: Machine n n -> [Op]
-collect prog = snd $ runIdentity (runKleisli (elimWriter prog) initial)
+--- Runner for compiler
+assemble :: Machine n n -> [Op]
+assemble prog = snd $ runIdentity (runKleisli (elimWriter prog) initial)
     where initial = undefined :: n
        
-expr = ((IntLit 10) :+: (IntLit 5)) :*: (IntLit 3)                   
-test = collect (compileExpr expr >>> print)
-
+--- Optimizer : Eliminates [push r, pop r] and [pop r, push r]
 optimize :: [Op] -> [Op]
 optimize = fst . optimize'
     where optimize' :: [Op] -> ([Op], Bool)
@@ -98,3 +101,5 @@ optimize = fst . optimize'
                                   else (op:ops', False)
           optimize' [] = ([], False)
                                               
+expr = ((IntLit 10) :+: (IntLit 5)) :*: (IntLit 3)                   
+test = assemble (compileExpr expr >>> print)
