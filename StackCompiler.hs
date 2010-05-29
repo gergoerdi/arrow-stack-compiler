@@ -1,12 +1,11 @@
 {-# LANGUAGE Arrows, EmptyDataDecls #-}
-module Compiler where
+module StackCompiler where
 
 import Prelude hiding (print)    
     
 import Control.Arrow
 import Control.Arrow.Transformer.Writer
 import Control.Arrow.Operations
-import Control.Monad
 import Control.Monad.Identity
 
 --- Type-level naturals    
@@ -38,7 +37,7 @@ type Machine b c = WriterArrow [Op] (Kleisli Identity) b c
 output :: Op -> Machine n m
 output op = proc _ -> do
               write -< [op]
-              returnA -< (undefined :: m)
+              returnA -< undefined
 
 
 --- CPU opcodes with stack specification
@@ -100,6 +99,7 @@ optimize = fst . optimize'
                                in if optimized then optimize' (op:ops')
                                   else (op:ops', False)
           optimize' [] = ([], False)
-                                              
+
+--- Demo                         
 expr = ((IntLit 10) :+: (IntLit 5)) :*: (IntLit 3)                   
 test = assemble (compileExpr expr >>> print)
