@@ -91,14 +91,14 @@ assemble prog = snd $ runIdentity (runKleisli (elimWriter prog) initial)
        
 --- Optimizer : Eliminates [push r, pop r] and [pop r, push r]
 optimize :: [Op] -> [Op]
-optimize = fst . optimize'
-    where optimize' :: [Op] -> ([Op], Bool)
-          optimize' ((Push r):(Pop r'):ops) | r == r' = (fst (optimize' ops), True)
-          optimize' ((Pop r):(Push r'):ops) | r == r' = (fst (optimize' ops), True)
-          optimize' (op:ops) = let (ops', optimized) = optimize' ops
-                               in if optimized then optimize' (op:ops')
-                                  else (op:ops', False)
-          optimize' [] = ([], False)
+optimize ops = optimize' [] ops
+    where optimize' (x:xs) (y:ys) | isNop x y = optimize' xs ys
+          optimize' xs     (y:ys)             = optimize' (y:xs) ys
+          optimize' xs     []                 = reverse xs
+
+          isNop (Push r) (Pop r')  | r == r' = True
+          isNop (Pop r)  (Push r') | r == r' = True
+          isNop _        _                   = False
 
 --- Demo                         
 expr = ((IntLit 10) :+: (IntLit 5)) :*: (IntLit 3)                   
